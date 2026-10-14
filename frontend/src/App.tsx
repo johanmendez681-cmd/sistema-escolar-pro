@@ -1,48 +1,81 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldAlert, Printer, Plus, X, GraduationCap, FileText, AlertTriangle, CheckCircle2, History, Sparkles } from 'lucide-react';
+import {
+  Printer, Plus, X, GraduationCap, FileText, AlertTriangle,
+  CheckCircle2, History, LogOut, Search, Database, Award, ShieldAlert
+} from 'lucide-react';
+import Login from './Login';
+import ModalImpresion from './ModalImpresion';
 
 export default function App() {
+  const [usuarioActivo, setUsuarioActivo] = useState<any>(null);
   const [pestaña, setPestaña] = useState<'actas' | 'demeritos'>('actas');
-
   const [nombre, setNombre] = useState('');
   const [grado, setGrado] = useState('');
   const [seccion, setSeccion] = useState('');
   const [motivo, setMotivo] = useState('');
   const [cantidad, setCantidad] = useState('1');
+  const [busqueda, setBusqueda] = useState('');
 
   const [actas, setActas] = useState<any[]>([]);
   const [demeritos, setDemeritos] = useState<any[]>([]);
   const [docImprimir, setDocImprimir] = useState<any>(null);
   const [mensaje, setMensaje] = useState(false);
 
+  useEffect(() => {
+    const sesionGuardada = localStorage.getItem('sesionEscolarPro');
+    if (sesionGuardada) {
+      setUsuarioActivo(JSON.parse(sesionGuardada));
+    }
+  }, []);
+
   const cargarDatos = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/registros');
-      if (res.ok) {
-        const data = await res.json();
-        setActas(data.filter((d: any) => d.tipo === 'actas'));
-        setDemeritos(data.filter((d: any) => d.tipo === 'demeritos'));
+      const [resActas, resDemeritos] = await Promise.all([
+        fetch('http://localhost:3000/api/actas'),
+        fetch('http://localhost:3000/api/demeritos')
+      ]);
+
+      if (resActas.ok) {
+        const dataActas = await resActas.json();
+        setActas(dataActas.map((a: any) => ({ ...a, tipo: 'actas' })));
+      }
+      if (resDemeritos.ok) {
+        const dataDem = await resDemeritos.json();
+        setDemeritos(dataDem.map((d: any) => ({ ...d, tipo: 'demeritos' })));
       }
     } catch (error) {
-      console.error('Error conectando con la base de datos:', error);
+      console.error('Error conectando con las tablas de MySQL:', error);
     }
   };
 
   useEffect(() => {
-    cargarDatos();
-  }, []);
+    if (usuarioActivo) {
+      cargarDatos();
+    }
+  }, [usuarioActivo]);
+
+  const cerrarSesion = () => {
+    localStorage.removeItem('sesionEscolarPro');
+    setUsuarioActivo(null);
+  };
 
   const guardarRegistro = async (e: React.FormEvent) => {
     e.preventDefault();
     const nuevoRegistro = {
-      tipo: pestaña,
       fecha: new Date().toLocaleDateString('es-SV', { year: 'numeric', month: 'long', day: 'numeric' }),
-      nombre, grado, seccion, motivo, cantidad
+      nombre,
+      grado,
+      seccion,
+      motivo,
+      cantidad,
+      emitido_por: usuarioActivo?.nombre || 'Dirección Académica'
     };
 
+    const endpoint = pestaña === 'actas' ? '/api/actas' : '/api/demeritos';
+
     try {
-      await fetch('http://localhost:3000/api/registros', {
+      await fetch(`http://localhost:3000${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(nuevoRegistro)
@@ -55,113 +88,349 @@ export default function App() {
     }
   };
 
-  const eliminarRegistro = async (id: number) => {
+  const eliminarRegistro = async (id: number, tipo: 'actas' | 'demeritos') => {
+    const endpoint = tipo === 'actas' ? `/api/actas/${id}` : `/api/demeritos/${id}`;
     try {
-      await fetch(`http://localhost:3000/api/registros/${id}`, { method: 'DELETE' });
+      await fetch(`http://localhost:3000${endpoint}`, { method: 'DELETE' });
       cargarDatos();
     } catch (error) {
       console.error('Error al eliminar:', error);
     }
   };
 
+  if (!usuarioActivo) {
+    return (
+      <Login
+        onLoginSuccess={(usuario) => {
+          setUsuarioActivo(usuario);
+          localStorage.setItem('sesionEscolarPro', JSON.stringify(usuario));
+        }}
+      />
+    );
+  }
+
+  const esActas = pestaña === 'actas';
+  const listaActual = esActas ? actas : demeritos;
+  const listaFiltrada = listaActual.filter((item) =>
+    item.nombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
+    item.grado?.toLowerCase().includes(busqueda.toLowerCase()) ||
+    item.seccion?.toLowerCase().includes(busqueda.toLowerCase()) ||
+    item.motivo?.toLowerCase().includes(busqueda.toLowerCase())
+  );
+
+  const totalPuntosActivos = listaActual.reduce((acc, item) => acc + (parseInt(item.cantidad) || 0), 0);
+
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex flex-col font-sans relative overflow-hidden text-slate-800">
+    <div className="min-h-screen bg-[#060913] flex flex-col font-sans relative overflow-hidden text-white">
       
-      {/* MAGIA CSS: MÁRGENES CERO EN IMPRESIÓN Y FORZAR COLORES EXACTOS */}
+      {/* MAGIA CSS: IMPRESIÓN EN PAPEL BLANCO PURO */}
       <style>
         {`
           @media print {
             @page { margin: 0; }
-            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            body { background: #ffffff !important; color: #000000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           }
         `}
       </style>
 
-      {/* MOTOR GRÁFICO */}
+      {/* AURORA BOREAL REACTIVA SEGÚN LA PESTAÑA ACTIVA + MALLA CIBERNÉTICA */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden print:hidden">
-        <motion.div animate={{ scale: [1, 1.2, 1], x: [0, 60, 0], y: [0, 40, 0] }} transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }} className="absolute -top-[10%] -left-[10%] w-[500px] h-[500px] rounded-full bg-blue-400/20 blur-[120px]" />
-        <motion.div animate={{ scale: [1, 1.3, 1], x: [0, -50, 0], y: [0, -60, 0] }} transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }} className="absolute top-[20%] -right-[10%] w-[600px] h-[600px] rounded-full bg-indigo-400/20 blur-[140px]" />
-        <motion.div animate={{ scale: [1, 1.1, 1], x: [0, 40, 0], y: [0, -40, 0] }} transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }} className="absolute -bottom-[10%] left-[20%] w-[550px] h-[550px] rounded-full bg-rose-400/15 blur-[130px]" />
+        <motion.div
+          animate={{ scale: [1, 1.25, 1], x: [0, 70, 0], y: [0, 40, 0] }}
+          transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+          className={`absolute -top-[15%] -left-[10%] w-[600px] h-[600px] rounded-full blur-[150px] transition-colors duration-1000 ${
+            esActas ? 'bg-blue-600/25' : 'bg-rose-600/25'
+          }`}
+        />
+        <motion.div
+          animate={{ scale: [1, 1.3, 1], x: [0, -60, 0], y: [0, -50, 0] }}
+          transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
+          className={`absolute top-[20%] -right-[10%] w-[650px] h-[650px] rounded-full blur-[160px] transition-colors duration-1000 ${
+            esActas ? 'bg-indigo-600/20' : 'bg-orange-600/20'
+          }`}
+        />
+        <motion.div
+          animate={{ scale: [1, 1.15, 1], x: [0, 40, 0], y: [0, -40, 0] }}
+          transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+          className={`absolute -bottom-[15%] left-[25%] w-[550px] h-[550px] rounded-full blur-[140px] transition-colors duration-1000 ${
+            esActas ? 'bg-cyan-500/15' : 'bg-pink-600/15'
+          }`}
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:4rem_4rem]" />
       </div>
 
-      <header className="relative z-10 p-6 print:hidden">
-        <div className="max-w-7xl mx-auto bg-white/40 backdrop-blur-2xl border border-white/60 shadow-lg shadow-slate-200/50 rounded-3xl p-4 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-5 pl-2">
-            <motion.div whileHover={{ rotate: 180 }} transition={{ duration: 0.5 }} className="w-14 h-14 rounded-2xl shadow-lg bg-white flex items-center justify-center p-2 border border-slate-100">
+      {/* CABECERA SUPERIOR HOLOGRÁFICA */}
+      <header className="relative z-10 px-6 pt-6 pb-2 print:hidden">
+        <div className="max-w-7xl mx-auto bg-white/[0.04] backdrop-blur-3xl border border-white/10 shadow-[0_10px_50px_rgba(0,0,0,0.5)] rounded-[2rem] p-4 flex flex-col lg:flex-row items-center justify-between gap-6">
+          
+          {/* Identidad Institucional */}
+          <div className="flex items-center gap-4 pl-2">
+            <motion.div whileHover={{ rotate: 8, scale: 1.06 }} className="w-14 h-14 rounded-2xl shadow-lg bg-white flex items-center justify-center p-2 border-2 border-white/40">
               <img src="/logo.png" alt="Logo Institución" className="w-full h-full object-contain" />
             </motion.div>
             <div>
-              <h1 className="text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 tracking-tight">C.E. Jutta Steiner</h1>
-              <p className="text-slate-500 text-sm font-semibold flex items-center gap-1">Sistema Disciplinario Oficial <Sparkles size={14} className="text-amber-400" /></p>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl md:text-2xl font-black text-white tracking-tight">C.E. "Jutta Steiner de Toruño"</h1>
+                <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" /> MySQL Activo
+                </span>
+              </div>
+              <p className="text-slate-400 text-xs font-medium flex items-center gap-1.5 mt-0.5">
+                <Database size={13} className="text-cyan-400" />
+                <span>Arquitectura Multi-Tabla: <code className="text-slate-300">usuarios</code> • <code className="text-blue-400">actas</code> • <code className="text-rose-400">demeritos</code></span>
+              </p>
             </div>
           </div>
-          
-          <div className="flex bg-slate-900/5 backdrop-blur-md p-1.5 rounded-2xl border border-white/40 shadow-inner relative">
-            <button onClick={() => setPestaña('actas')} className="relative px-8 py-3 rounded-xl font-bold text-sm transition-colors z-10 flex items-center gap-2">
-              {pestaña === 'actas' && <motion.div layoutId="pestañaActiva" className="absolute inset-0 bg-white rounded-xl shadow-md border border-slate-100 z-[-1]" transition={{ type: "spring", stiffness: 400, damping: 30 }} />}
-              <FileText size={18} className={pestaña === 'actas' ? 'text-blue-600' : 'text-slate-400'} />
-              <span className={pestaña === 'actas' ? 'text-slate-900' : 'text-slate-500'}>Actas</span>
+
+          {/* Selector de Tablas con Píldora Elástica (Actas vs Deméritos) */}
+          <div className="flex bg-slate-950/70 p-1.5 rounded-2xl border border-white/10 relative">
+            <button
+              onClick={() => setPestaña('actas')}
+              className="relative px-7 py-3 rounded-xl font-bold text-sm transition-colors z-10 flex items-center gap-2.5"
+            >
+              {esActas && (
+                <motion.div
+                  layoutId="pestañaActiva"
+                  className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg shadow-blue-600/40 border border-blue-400/40 z-[-1]"
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+              )}
+              <FileText size={18} className={esActas ? 'text-white' : 'text-slate-400'} />
+              <span className={esActas ? 'text-white' : 'text-slate-400 hover:text-white'}>Módulo de Actas</span>
+              <span className={`px-2 py-0.5 rounded-md text-xs font-black ${esActas ? 'bg-black/25 text-blue-100' : 'bg-white/5 text-slate-400'}`}>
+                {actas.length}
+              </span>
             </button>
-            <button onClick={() => setPestaña('demeritos')} className="relative px-8 py-3 rounded-xl font-bold text-sm transition-colors z-10 flex items-center gap-2">
-              {pestaña === 'demeritos' && <motion.div layoutId="pestañaActiva" className="absolute inset-0 bg-white rounded-xl shadow-md border border-slate-100 z-[-1]" transition={{ type: "spring", stiffness: 400, damping: 30 }} />}
-              <AlertTriangle size={18} className={pestaña === 'demeritos' ? 'text-rose-600' : 'text-slate-400'} />
-              <span className={pestaña === 'demeritos' ? 'text-slate-900' : 'text-slate-500'}>Deméritos</span>
+
+            <button
+              onClick={() => setPestaña('demeritos')}
+              className="relative px-7 py-3 rounded-xl font-bold text-sm transition-colors z-10 flex items-center gap-2.5"
+            >
+              {!esActas && (
+                <motion.div
+                  layoutId="pestañaActiva"
+                  className="absolute inset-0 bg-gradient-to-r from-rose-600 to-pink-600 rounded-xl shadow-lg shadow-rose-600/40 border border-rose-400/40 z-[-1]"
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+              )}
+              <AlertTriangle size={18} className={!esActas ? 'text-white' : 'text-slate-400'} />
+              <span className={!esActas ? 'text-white' : 'text-slate-400 hover:text-white'}>Módulo de Deméritos</span>
+              <span className={`px-2 py-0.5 rounded-md text-xs font-black ${!esActas ? 'bg-black/25 text-rose-100' : 'bg-white/5 text-slate-400'}`}>
+                {demeritos.length}
+              </span>
             </button>
           </div>
+
+          {/* Mini-Perfil del Usuario Logueado */}
+          <div className="flex items-center gap-3 bg-white/[0.05] px-4 py-2.5 rounded-2xl border border-white/10">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm text-white shadow-lg ${
+              esActas ? 'bg-gradient-to-tr from-blue-600 to-cyan-500 shadow-blue-500/20' : 'bg-gradient-to-tr from-rose-600 to-amber-500 shadow-rose-500/20'
+            }`}>
+              {usuarioActivo.nombre ? usuarioActivo.nombre.charAt(0).toUpperCase() : 'D'}
+            </div>
+            <div className="pr-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">{usuarioActivo.rol || 'Director'}</p>
+              <p className="text-sm font-bold text-white leading-tight">{usuarioActivo.nombre || usuarioActivo.correo}</p>
+            </div>
+            <button
+              onClick={cerrarSesion}
+              title="Cerrar Sesión"
+              className="p-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/20 transition-all"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+
         </div>
       </header>
 
+      {/* BARRA DE MÉTRICAS EN VIVO (KPI CARDS) */}
+      <section className="relative z-10 max-w-7xl w-full mx-auto px-6 pt-4 pb-2 grid grid-cols-1 sm:grid-cols-3 gap-4 print:hidden">
+        <motion.div whileHover={{ y: -3 }} className="bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Tabla MySQL: <code className="text-blue-400">actas</code></p>
+            <p className="text-2xl font-black text-white mt-1">{actas.length} <span className="text-xs font-semibold text-slate-400">expedientes</span></p>
+          </div>
+          <div className="p-3.5 rounded-2xl bg-blue-500/15 text-blue-400 border border-blue-500/20">
+            <FileText size={24} />
+          </div>
+        </motion.div>
+
+        <motion.div whileHover={{ y: -3 }} className="bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Tabla MySQL: <code className="text-rose-400">demeritos</code></p>
+            <p className="text-2xl font-black text-white mt-1">{demeritos.length} <span className="text-xs font-semibold text-slate-400">boletas</span></p>
+          </div>
+          <div className="p-3.5 rounded-2xl bg-rose-500/15 text-rose-400 border border-rose-500/20">
+            <ShieldAlert size={24} />
+          </div>
+        </motion.div>
+
+        <motion.div whileHover={{ y: -3 }} className="bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Total Sanciones ({esActas ? 'Actas' : 'Puntos'})</p>
+            <p className={`text-2xl font-black mt-1 ${esActas ? 'text-cyan-400' : 'text-rose-400'}`}>
+              {totalPuntosActivos} <span className="text-xs font-semibold text-slate-400">acumulados</span>
+            </p>
+          </div>
+          <div className={`p-3.5 rounded-2xl border ${esActas ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20' : 'bg-amber-500/15 text-amber-400 border-amber-500/20'}`}>
+            <Award size={24} />
+          </div>
+        </motion.div>
+      </section>
+
+      {/* ÁREA DE TRABAJO PRINCIPAL */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 relative z-10 print:hidden">
         
-        <div className="lg:col-span-4">
+        {/* COLUMNA IZQUIERDA: FORMULARIO HOLOGRÁFICO CON BARRA DE NEÓN */}
+        <div className="lg:col-span-5">
           <AnimatePresence mode="wait">
-            <motion.div key={pestaña} initial={{ opacity: 0, y: 20, filter: 'blur(10px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0, y: -20, filter: 'blur(10px)' }} transition={{ duration: 0.3 }} className="bg-white/60 backdrop-blur-3xl p-8 rounded-[2rem] shadow-2xl shadow-slate-200/50 border border-white h-full">
-              
-              <h2 className="text-2xl font-black text-slate-800 mb-8 flex items-center gap-3">
-                <div className={`p-2 rounded-xl ${pestaña === 'actas' ? 'bg-blue-100 text-blue-600' : 'bg-rose-100 text-rose-600'}`}>
-                  <Plus size={24} />
-                </div>
-                Generar {pestaña === 'actas' ? 'Acta' : 'Demérito'}
-              </h2>
-              
-              <form onSubmit={guardarRegistro} className="space-y-5">
+            <motion.div
+              key={pestaña}
+              initial={{ opacity: 0, x: -25 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 25 }}
+              transition={{ duration: 0.3 }}
+              className={`bg-white/[0.04] backdrop-blur-3xl p-8 rounded-[2.2rem] border shadow-2xl h-full relative overflow-hidden ${
+                esActas
+                  ? 'border-blue-500/30 shadow-[0_0_60px_rgba(37,99,235,0.12)]'
+                  : 'border-rose-500/30 shadow-[0_0_60px_rgba(225,29,72,0.12)]'
+              }`}
+            >
+              {/* Barra luminosa superior */}
+              <div className={`absolute top-0 left-0 right-0 h-1.5 ${
+                esActas ? 'bg-gradient-to-r from-blue-500 via-cyan-400 to-indigo-500' : 'bg-gradient-to-r from-rose-500 via-amber-400 to-pink-500'
+              }`} />
+
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-black text-white flex items-center gap-3">
+                  <div className={`p-2.5 rounded-2xl border ${
+                    esActas ? 'bg-blue-500/20 border-blue-400/30 text-blue-400' : 'bg-rose-500/20 border-rose-400/30 text-rose-400'
+                  }`}>
+                    <Plus size={22} />
+                  </div>
+                  <span>Emitir {esActas ? 'Acta Oficial' : 'Boleta Demérito'}</span>
+                </h2>
+                <span className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-slate-300">
+                  INSERT INTO {esActas ? 'actas' : 'demeritos'}
+                </span>
+              </div>
+
+              <form onSubmit={guardarRegistro} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Nombre Completo</label>
-                  <div className="relative group">
-                    <GraduationCap className={`absolute left-4 top-4 transition-colors ${pestaña === 'actas' ? 'group-focus-within:text-blue-500' : 'group-focus-within:text-rose-500'} text-slate-400`} size={20} />
-                    <input type="text" required value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. Carlos Roberto Méndez" className="w-full pl-12 pr-4 py-4 bg-white/50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-opacity-20 outline-none transition-all font-medium focus:ring-blue-500 focus:border-blue-500" />
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-widest mb-2">
+                    Nombre Completo del Alumno (Nombres y 2 Apellidos)
+                  </label>
+                  <div className="relative">
+                    <GraduationCap className={`absolute left-4 top-4 ${esActas ? 'text-blue-400' : 'text-rose-400'}`} size={20} />
+                    <input
+                      type="text"
+                      required
+                      value={nombre}
+                      onChange={(e) => setNombre(e.target.value)}
+                      placeholder="Ej. Carlos Roberto Méndez Saravia"
+                      className="w-full pl-12 pr-4 py-3.5 bg-white/[0.05] border border-white/10 rounded-2xl text-white placeholder-slate-500 focus:bg-white/[0.09] focus:border-blue-400 focus:ring-4 focus:ring-blue-500/20 outline-none transition-all font-medium"
+                    />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Grado</label>
-                    <input type="text" required value={grado} onChange={(e) => setGrado(e.target.value)} placeholder="1er Año" className="w-full px-4 py-4 bg-white/50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-opacity-20 outline-none transition-all font-medium focus:ring-blue-500" />
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-widest mb-2">Grado</label>
+                    <input
+                      type="text"
+                      required
+                      value={grado}
+                      onChange={(e) => setGrado(e.target.value)}
+                      placeholder="Ej. 3er Año"
+                      className="w-full px-4 py-3.5 bg-white/[0.05] border border-white/10 rounded-2xl text-white placeholder-slate-500 focus:bg-white/[0.09] focus:border-blue-400 outline-none transition-all font-medium"
+                    />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Sección</label>
-                    <input type="text" required value={seccion} onChange={(e) => setSeccion(e.target.value)} placeholder="A" className="w-full px-4 py-4 bg-white/50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-opacity-20 outline-none transition-all font-black uppercase focus:ring-blue-500" />
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-widest mb-2">Sección</label>
+                    <input
+                      type="text"
+                      required
+                      value={seccion}
+                      onChange={(e) => setSeccion(e.target.value)}
+                      placeholder="Ej. A"
+                      className="w-full px-4 py-3.5 bg-white/[0.05] border border-white/10 rounded-2xl text-white placeholder-slate-500 focus:bg-white/[0.09] focus:border-blue-400 outline-none transition-all font-black uppercase"
+                    />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Motivo de la Infracción</label>
-                  <textarea required value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Describe el hecho ocurrido..." rows={3} className="w-full px-5 py-4 bg-white/50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-opacity-20 outline-none transition-all font-medium resize-none focus:ring-blue-500"></textarea>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-widest mb-2">
+                    Motivo / Descripción de la Falta
+                  </label>
+                  <textarea
+                    required
+                    value={motivo}
+                    onChange={(e) => setMotivo(e.target.value)}
+                    placeholder="Describa detalladamente la falta cometida..."
+                    rows={3}
+                    className="w-full px-4 py-3.5 bg-white/[0.05] border border-white/10 rounded-2xl text-white placeholder-slate-500 focus:bg-white/[0.09] focus:border-blue-400 outline-none transition-all font-medium resize-none"
+                  />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Cantidad Aplicada</label>
-                  <input type="number" min="1" required value={cantidad} onChange={(e) => setCantidad(e.target.value)} className={`w-full px-5 py-4 bg-white/50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-opacity-20 outline-none transition-all font-black text-xl ${pestaña === 'actas' ? 'focus:ring-blue-500 text-blue-600' : 'focus:ring-rose-500 text-rose-600'}`} />
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-widest">
+                      Cantidad de {esActas ? 'Actas' : 'Deméritos'} a Aplicar
+                    </label>
+                    <div className="flex gap-1.5">
+                      {['1', '2', '3', '5'].map((num) => (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => setCantidad(num)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all ${
+                            cantidad === num
+                              ? esActas ? 'bg-blue-500 text-white' : 'bg-rose-500 text-white'
+                              : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                          }`}
+                        >
+                          +{num}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={cantidad}
+                    onChange={(e) => setCantidad(e.target.value)}
+                    className={`w-full px-5 py-3.5 bg-white/[0.05] border border-white/10 rounded-2xl outline-none transition-all font-black text-xl ${
+                      esActas ? 'text-cyan-400 focus:border-blue-400' : 'text-rose-400 focus:border-rose-400'
+                    }`}
+                  />
                 </div>
 
-                <motion.button whileHover={{ scale: 1.02, translateY: -2 }} whileTap={{ scale: 0.98 }} type="submit" className={`w-full py-4 rounded-2xl font-black tracking-wide transition-all flex justify-center items-center gap-2 shadow-xl mt-6 border ${pestaña === 'actas' ? 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-blue-500/30 border-blue-400' : 'bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white shadow-rose-500/30 border-rose-400'}`}>
-                  PROCESAR DOCUMENTO <FileText size={20} />
+                <motion.button
+                  whileHover={{ scale: 1.02, translateY: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  type="submit"
+                  className={`w-full py-4 rounded-2xl font-black tracking-wide transition-all flex justify-center items-center gap-2.5 shadow-xl mt-4 border text-white ${
+                    esActas
+                      ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 shadow-blue-600/30 border-blue-400/40'
+                      : 'bg-gradient-to-r from-rose-600 via-pink-600 to-amber-600 shadow-rose-600/30 border-rose-400/40'
+                  }`}
+                >
+                  <span>GUARDAR EN TABLA {esActas ? 'ACTAS' : 'DEMÉRITOS'}</span>
+                  <FileText size={20} />
                 </motion.button>
 
                 <AnimatePresence>
                   {mensaje && (
-                    <motion.div initial={{ opacity: 0, y: 10, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="p-4 bg-emerald-500/10 backdrop-blur-md text-emerald-700 rounded-2xl flex items-center gap-3 text-sm font-bold border border-emerald-500/20">
-                      <CheckCircle2 size={20} className="text-emerald-500" /> Registro guardado en MySQL.
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="p-3.5 bg-emerald-500/15 backdrop-blur-md text-emerald-300 rounded-2xl flex items-center gap-3 text-xs font-bold border border-emerald-500/30"
+                    >
+                      <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
+                      <span>Guardado exitosamente en la tabla MySQL <code className="underline">{esActas ? 'actas' : 'demeritos'}</code>.</span>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -170,48 +439,99 @@ export default function App() {
           </AnimatePresence>
         </div>
 
-        <div className="lg:col-span-8">
-          <div className="bg-white/60 backdrop-blur-3xl p-8 rounded-[2rem] shadow-2xl shadow-slate-200/50 border border-white h-full max-h-[85vh] flex flex-col">
-            <h2 className="text-2xl font-black text-slate-800 mb-8 flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-slate-100 text-slate-500"><History size={24} /></div>
-              Base de Datos: {pestaña === 'actas' ? 'Actas Emitidas' : 'Deméritos'}
-            </h2>
+        {/* COLUMNA DERECHA: HISTORIAL DE BASE DE DATOS Y BUSCADOR */}
+        <div className="lg:col-span-7">
+          <div className="bg-white/[0.04] backdrop-blur-3xl p-8 rounded-[2.2rem] border border-white/10 shadow-2xl h-full max-h-[82vh] flex flex-col">
             
-            <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar space-y-4 pb-10">
-              {((pestaña === 'actas' ? actas : demeritos).length === 0) ? (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-24 bg-white/50 rounded-3xl border border-dashed border-slate-300">
-                  <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4"><AlertTriangle size={32} className="text-slate-400" /></div>
-                  <p className="text-slate-500 font-bold text-lg">No hay registros almacenados.</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-2xl font-black text-white flex items-center gap-3">
+                  <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 text-cyan-400">
+                    <History size={22} />
+                  </div>
+                  <span>Registros en <code className={esActas ? 'text-blue-400' : 'text-rose-400'}>{esActas ? 'actas' : 'demeritos'}</code></span>
+                </h2>
+              </div>
+
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3.5 top-3 text-slate-400" size={16} />
+                <input
+                  type="text"
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  placeholder="Buscar alumno o grado..."
+                  className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-slate-400 focus:border-cyan-400 outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3.5 pb-6">
+              {listaFiltrada.length === 0 ? (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-20 bg-white/[0.02] rounded-3xl border border-dashed border-white/10">
+                  <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center mx-auto mb-4 text-slate-400">
+                    <AlertTriangle size={28} />
+                  </div>
+                  <p className="text-slate-300 font-bold text-base">No hay registros en la tabla <code className="text-cyan-400">{esActas ? 'actas' : 'demeritos'}</code>.</p>
+                  <p className="text-slate-500 text-xs mt-1">Completa el formulario de la izquierda para insertar el primer folio.</p>
                 </motion.div>
               ) : (
                 <AnimatePresence>
-                  {(pestaña === 'actas' ? actas : demeritos).map((item, index) => (
-                    <motion.div 
-                      key={item.id} 
-                      initial={{ opacity: 0, y: 20 }} 
-                      animate={{ opacity: 1, y: 0 }} 
-                      exit={{ opacity: 0, scale: 0.9, x: 50 }} 
-                      transition={{ delay: index * 0.05 }}
-                      className="group bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-slate-200/50 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between transition-all duration-300"
+                  {listaFiltrada.map((item, index) => (
+                    <motion.div
+                      key={item.id}
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.9, x: 40 }}
+                      transition={{ delay: index * 0.04 }}
+                      className="group bg-white/[0.04] hover:bg-white/[0.08] p-5 rounded-3xl border border-white/10 hover:border-white/25 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between transition-all duration-300 shadow-lg"
                     >
-                      <div>
-                        <h3 className="font-black text-slate-800 text-xl tracking-tight">{item.nombre}</h3>
-                        <div className="flex items-center gap-3 mt-2">
-                          <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-xs font-bold tracking-wide">Grado: {item.grado} "{item.seccion}"</span>
-                          <span className="text-slate-400 text-xs font-semibold">{item.fecha}</span>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-white/10 text-slate-300">
+                            #{item.id}
+                          </span>
+                          <h3 className="font-black text-white text-lg tracking-tight">{item.nombre}</h3>
+                        </div>
+
+                        <p className="text-slate-300 text-xs italic line-clamp-1">"{item.motivo}"</p>
+
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <span className="bg-white/10 text-slate-200 px-2.5 py-1 rounded-lg text-[11px] font-bold">
+                            Grado: {item.grado} "{item.seccion}"
+                          </span>
+                          <span className="text-slate-400 text-[11px] font-medium">• {item.fecha}</span>
+                          {item.emitido_por && (
+                            <span className="text-cyan-400/90 text-[11px] font-semibold">• Por: {item.emitido_por}</span>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 w-full md:w-auto">
-                        <span className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-widest shadow-inner ${pestaña === 'actas' ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
-                          {item.cantidad} {pestaña === 'actas' ? (item.cantidad === '1' ? 'Acta' : 'Actas') : 'PTS'}
+
+                      <div className="flex items-center gap-2.5 w-full md:w-auto shrink-0">
+                        <span className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider border ${
+                          esActas
+                            ? 'bg-blue-500/20 text-blue-300 border-blue-400/30'
+                            : 'bg-rose-500/20 text-rose-300 border-rose-400/30'
+                        }`}>
+                          {item.cantidad} {esActas ? (item.cantidad === '1' ? 'Acta' : 'Actas') : 'PTS'}
                         </span>
-                        
-                        <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setDocImprimir(item)} className="flex-1 md:flex-none bg-slate-900 hover:bg-black text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-slate-900/20">
-                          <Printer size={16} /> Imprimir
+
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => setDocImprimir(item)}
+                          className="flex-1 md:flex-none bg-white text-slate-950 hover:bg-cyan-300 px-4 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-colors shadow-lg"
+                        >
+                          <Printer size={15} /> Imprimir
                         </motion.button>
-                        
-                        <motion.button whileHover={{ scale: 1.1, rotate: 10 }} whileTap={{ scale: 0.9 }} onClick={() => eliminarRegistro(item.id)} className="p-3 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors">
-                          <X size={20} />
+
+                        <motion.button
+                          whileHover={{ scale: 1.1, rotate: 8 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => eliminarRegistro(item.id, pestaña)}
+                          className="p-2.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/15 rounded-xl transition-colors"
+                          title="Eliminar de MySQL"
+                        >
+                          <X size={18} />
                         </motion.button>
                       </div>
                     </motion.div>
@@ -223,95 +543,8 @@ export default function App() {
         </div>
       </main>
 
-      <AnimatePresence>
-        {docImprimir && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md print:bg-white print:p-0 print:block">
-            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} transition={{ type: "spring", damping: 25, stiffness: 300 }} className={`bg-white rounded-[2rem] shadow-2xl w-full max-w-3xl flex flex-col max-h-[95vh] print:max-h-none print:shadow-none print:rounded-none border-t-[16px] print:border-none relative ${docImprimir.tipo === 'actas' ? 'border-blue-600' : 'border-rose-600'}`}>
-              
-              <div className="absolute top-4 right-4 flex gap-2 print:hidden z-10">
-                <button onClick={() => window.print()} className="bg-slate-900 hover:bg-black text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-xl shadow-slate-900/20 transition-transform active:scale-95">
-                  <Printer size={18} /> Imprimir Formato
-                </button>
-                <button onClick={() => setDocImprimir(null)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 p-3 rounded-xl font-bold transition-colors">
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Se ajustó el padding interior (print:p-10) para que no rebase la página */}
-              <div className="p-10 md:p-14 overflow-y-auto custom-scrollbar print:overflow-visible print:p-10">
-                
-                <div className="text-center mb-8 border-b-2 border-slate-200 print:border-black pb-8">
-                  <img src="/logo.png" alt="Logo C.E. Jutta Steiner" className="w-28 h-32 mx-auto mb-4 object-contain" />
-                  <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tight">C.E. "Jutta Steiner de Toruño"</h2>
-                  <h3 className="text-lg font-bold text-slate-500 uppercase tracking-widest mt-1 print:text-black">Dirección y Control Disciplinario</h3>
-                  <p className="text-slate-400 mt-2 font-black uppercase text-sm tracking-wider print:text-black">
-                    {docImprimir.tipo === 'actas' ? 'ACTA DISCIPLINARIA OFICIAL' : 'BOLETA DE SANCIÓN (DEMÉRITOS)'} • FOLIO NO. {docImprimir.id.toString().slice(-6)}
-                  </p>
-                </div>
-
-                <div className="space-y-6">
-                  <p className="text-md text-slate-700 print:text-black leading-relaxed text-justify font-medium">
-                    En la dirección de este centro educativo, con fecha <strong className="text-slate-900 print:text-black">{docImprimir.fecha}</strong>, se emite el presente documento para dejar constancia de la falta incurrida por el alumno descrito a continuación:
-                  </p>
-
-                  <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 print:bg-transparent print:border-2 print:border-black">
-                    <div className="grid grid-cols-2 gap-y-6">
-                      <div className="col-span-2">
-                        <p className="text-xs font-black text-slate-400 print:text-slate-600 uppercase tracking-widest mb-1">Nombre Completo del Estudiante</p>
-                        <p className="text-2xl font-black text-slate-900 print:text-black uppercase tracking-tight">{docImprimir.nombre}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-black text-slate-400 print:text-slate-600 uppercase tracking-widest mb-1">Grado</p>
-                        <p className="text-xl font-bold text-slate-800 print:text-black uppercase">{docImprimir.grado}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-black text-slate-400 print:text-slate-600 uppercase tracking-widest mb-1">Sección</p>
-                        <p className="text-xl font-bold text-slate-800 print:text-black uppercase">"{docImprimir.seccion}"</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-black text-slate-800 print:text-black uppercase tracking-widest mb-3">Motivo / Descripción de los hechos:</p>
-                    <p className="text-md text-slate-700 print:text-black bg-white p-5 rounded-2xl border border-slate-200 print:border-none print:p-0 italic leading-relaxed text-justify font-medium">
-                      "{docImprimir.motivo}"
-                    </p>
-                  </div>
-
-                  <div className={`p-6 rounded-3xl border print:bg-transparent print:border-2 print:border-black flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mt-8 ${docImprimir.tipo === 'actas' ? 'bg-blue-50/50 border-blue-100' : 'bg-rose-50/50 border-rose-100'}`}>
-                    <div>
-                      <p className="font-bold text-slate-800 print:text-black text-lg tracking-tight">Sanción disciplinaria aplicada:</p>
-                      <p className="text-sm text-slate-500 print:text-black mt-1 font-medium">Conforme al reglamento interno escolar.</p>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-3xl font-black uppercase tracking-tight print:text-black ${docImprimir.tipo === 'actas' ? 'text-blue-600' : 'text-rose-600'}`}>
-                        {docImprimir.cantidad} {docImprimir.tipo === 'actas' ? (docImprimir.cantidad === '1' ? 'ACTA' : 'ACTAS') : 'DEMÉRITOS'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* FIRMAS: Forzamos el bloque negro (bg-black) para que nunca desaparezcan las líneas */}
-                <div className="flex justify-between mt-12 px-2 print:mt-16">
-                  <div className="text-center w-40">
-                    <div className="w-full h-[2px] bg-slate-800 print:bg-black mb-2"></div>
-                    <p className="font-black text-xs uppercase text-slate-800 print:text-black tracking-wider">Dirección</p>
-                  </div>
-                  <div className="text-center w-40">
-                    <div className="w-full h-[2px] bg-slate-800 print:bg-black mb-2"></div>
-                    <p className="font-black text-xs uppercase text-slate-800 print:text-black tracking-wider">Estudiante</p>
-                  </div>
-                  <div className="text-center w-40">
-                    <div className="w-full h-[2px] bg-slate-800 print:bg-black mb-2"></div>
-                    <p className="font-black text-xs uppercase text-slate-800 print:text-black tracking-wider">Madre/Padre</p>
-                  </div>
-                </div>
-
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* COMPONENTE DEL MODAL DE IMPRESIÓN */}
+      <ModalImpresion docImprimir={docImprimir} onClose={() => setDocImprimir(null)} />
 
     </div>
   );
