@@ -46,22 +46,39 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           setPassword('');
           setNombreUsuario('');
         } else {
-          if (modoAuth === 'login' && correo === 'director@juttasteiner.edu.sv' && password === 'admin123') {
-            const masterUser = { nombre: 'Dirección Académica', correo, rol: 'Director' };
-            onLoginSuccess(masterUser);
-          } else {
-            setErrorAuth(data.mensaje || 'Credenciales inválidas. Verifica tus datos.');
-          }
+          setErrorAuth(data.mensaje || 'Credenciales inválidas. Verifica tus datos.');
         }
       }, 650);
-    } catch (error) {
+    } catch {
       setTimeout(() => {
         setCargandoAuth(false);
-        if (correo === 'director@juttasteiner.edu.sv' && password === 'admin123') {
-          const masterUser = { nombre: 'Dirección Académica', correo, rol: 'Director' };
-          onLoginSuccess(masterUser);
+        const guardadosMovil = JSON.parse(localStorage.getItem('usuarios_celular') || '[]');
+
+        if (modoAuth === 'registro') {
+          const nuevoUsuario = {
+            id: Date.now(),
+            nombre: nombreUsuario,
+            correo: correo.trim().toLowerCase(),
+            password,
+            rol: rolUsuario
+          };
+          localStorage.setItem('usuarios_celular', JSON.stringify([...guardadosMovil, nuevoUsuario]));
+          onLoginSuccess(nuevoUsuario);
+          setCorreo('');
+          setPassword('');
+          setNombreUsuario('');
         } else {
-          setErrorAuth('No se pudo conectar al servidor MySQL (Puerto 3000).');
+          const usuarioEncontrado = guardadosMovil.find(
+            (u: any) => u.correo === correo.trim().toLowerCase() && u.password === password
+          );
+
+          if (usuarioEncontrado) {
+            onLoginSuccess(usuarioEncontrado);
+          } else if (correo.trim().toLowerCase() === 'director@juttasteiner.edu.sv' && password === 'admin123') {
+            onLoginSuccess({ nombre: 'Dirección Académica', correo, rol: 'Director' });
+          } else {
+            setErrorAuth('Correo o contraseña incorrectos. Si eres nuevo, regístrate en la pestaña superior.');
+          }
         }
       }, 650);
     }
@@ -76,8 +93,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   return (
     <div className="min-h-screen bg-[#060913] flex items-center justify-center p-4 font-sans relative overflow-hidden select-none">
-      
-      {/* AURORA BOREAL Y ORBES HOLOGRÁFICOS EN MOVIMIENTO */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <motion.div
           animate={{ scale: [1, 1.3, 1], x: [0, 80, 0], y: [0, -50, 0], rotate: [0, 90, 0] }}
@@ -94,18 +109,15 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
           className="absolute -bottom-[20%] left-[25%] w-[500px] h-[500px] rounded-full bg-cyan-500/15 blur-[130px]"
         />
-        {/* Malla cibernética sutil */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff06_1px,transparent_1px),linear-gradient(to_bottom,#ffffff06_1px,transparent_1px)] bg-[size:4rem_4rem]" />
       </div>
 
-      {/* CONTENEDOR CENTRAL DIVIDIDO CON BRILLO HOLOGRÁFICO */}
       <motion.div
         initial={{ opacity: 0, scale: 0.92, y: 30 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.6, type: "spring", damping: 25 }}
         className="relative z-10 w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 rounded-[2.5rem] bg-white/[0.04] backdrop-blur-3xl border border-white/15 shadow-[0_0_80px_rgba(37,99,235,0.18)] overflow-hidden"
       >
-        {/* PANEL IZQUIERDO: IDENTIDAD INSTITUCIONAL */}
         <div className="lg:col-span-5 p-10 md:p-12 bg-gradient-to-br from-blue-600/20 via-indigo-900/30 to-slate-950/80 border-b lg:border-b-0 lg:border-r border-white/10 flex flex-col justify-between relative overflow-hidden">
           <div className="relative z-10">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-400/20 text-blue-300 text-xs font-bold tracking-widest uppercase mb-8">
@@ -149,7 +161,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           </div>
         </div>
 
-        {/* PANEL DERECHO: FORMULARIO INTERACTIVO */}
         <div className="lg:col-span-7 p-10 md:p-12 flex flex-col justify-center bg-slate-950/40">
           <div className="flex bg-white/5 p-1.5 rounded-2xl border border-white/10 mb-8 relative">
             <button

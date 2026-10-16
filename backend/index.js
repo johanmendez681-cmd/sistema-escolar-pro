@@ -6,20 +6,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 1. Conexión a tu servidor MySQL local
 const db = mysql.createConnection({
     host: 'localhost',
     user: 'root',
-    password: 'johan12345Jr' // <--- Escribe aquí tu contraseña de MySQL
+    password: 'johan12345Jr'
 });
 
-// 2. Creación automática de la Base de Datos y las 3 Tablas Separadas
 db.connect(err => {
     if (err) {
-        console.error('❌ Error conectando a MySQL:', err.message);
+        console.error('Error conectando a MySQL:', err.message);
         return;
     }
-    console.log('✅ Conexión a MySQL exitosa');
 
     db.query("CREATE DATABASE IF NOT EXISTS sistema_escolar", (err) => {
         if (err) throw err;
@@ -27,7 +24,6 @@ db.connect(err => {
         db.query("USE sistema_escolar", (err) => {
             if (err) throw err;
 
-            // TABLA 1: USUARIOS (Exclusiva para el Login y Registro)
             const sqlUsuarios = `
                 CREATE TABLE IF NOT EXISTS usuarios (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -40,8 +36,6 @@ db.connect(err => {
             `;
             db.query(sqlUsuarios, (err) => {
                 if (err) throw err;
-
-                // Usuario oficial por defecto para que siempre puedas entrar
                 const adminPorDefecto = `
                     INSERT IGNORE INTO usuarios (nombre, correo, password, rol)
                     VALUES ('Dirección Académica', 'director@juttasteiner.edu.sv', 'admin123', 'Director')
@@ -49,7 +43,6 @@ db.connect(err => {
                 db.query(adminPorDefecto);
             });
 
-            // TABLA 2: ACTAS (Exclusiva para Actas Disciplinarias)
             const sqlActas = `
                 CREATE TABLE IF NOT EXISTS actas (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -57,7 +50,9 @@ db.connect(err => {
                     nombre VARCHAR(100) NOT NULL,
                     grado VARCHAR(50) NOT NULL,
                     seccion VARCHAR(10) NOT NULL,
-                    motivo TEXT NOT NULL,
+                    acudiente VARCHAR(100) NOT NULL,
+                    aspectos TEXT NOT NULL,
+                    observacion TEXT NOT NULL,
                     cantidad VARCHAR(10) NOT NULL,
                     emitido_por VARCHAR(100) DEFAULT 'Dirección Académica'
                 )
@@ -66,30 +61,36 @@ db.connect(err => {
                 if (err) throw err;
             });
 
-            // TABLA 3: DEMERITOS (Exclusiva para Boletas de Deméritos)
             const sqlDemeritos = `
                 CREATE TABLE IF NOT EXISTS demeritos (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     fecha VARCHAR(50) NOT NULL,
+                    centro_educativo VARCHAR(150) NOT NULL,
+                    codigo_ce VARCHAR(20) NOT NULL,
+                    departamento VARCHAR(50) NOT NULL,
+                    municipio VARCHAR(50) NOT NULL,
+                    distrito VARCHAR(50) NOT NULL,
                     nombre VARCHAR(100) NOT NULL,
+                    nie VARCHAR(30) NOT NULL,
+                    sexo VARCHAR(20) NOT NULL,
                     grado VARCHAR(50) NOT NULL,
                     seccion VARCHAR(10) NOT NULL,
-                    motivo TEXT NOT NULL,
+                    turno VARCHAR(30) NOT NULL,
+                    literal_demerito VARCHAR(5) NOT NULL,
+                    literal_redencion VARCHAR(5) DEFAULT '',
+                    literal_reconocimiento VARCHAR(5) DEFAULT '',
                     cantidad VARCHAR(10) NOT NULL,
                     emitido_por VARCHAR(100) DEFAULT 'Dirección Académica'
                 )
             `;
             db.query(sqlDemeritos, (err) => {
                 if (err) throw err;
-                console.log('✅ Tablas MySQL listas y separadas: [1. usuarios] [2. actas] [3. demeritos]');
+                console.log('Base de datos MySQL lista con todas las columnas oficiales');
             });
         });
     });
 });
 
-// ====================================================
-// RUTAS DE LA TABLA 1: USUARIOS (LOGIN Y REGISTRO)
-// ====================================================
 app.post('/api/login', (req, res) => {
     const { correo, password } = req.body;
     const query = 'SELECT id, nombre, correo, rol FROM usuarios WHERE correo = ? AND password = ?';
@@ -108,7 +109,7 @@ app.post('/api/registro', (req, res) => {
     const query = 'INSERT INTO usuarios (nombre, correo, password, rol) VALUES (?, ?, ?, ?)';
     db.query(query, [nombre, correo, password, rol || 'Docente'], (err, results) => {
         if (err) {
-            return res.status(400).json({ exito: false, mensaje: 'Ese correo ya está registrado en la tabla usuarios' });
+            return res.status(400).json({ exito: false, mensaje: 'Ese correo ya está registrado' });
         }
         res.json({
             exito: true,
@@ -117,9 +118,6 @@ app.post('/api/registro', (req, res) => {
     });
 });
 
-// ====================================================
-// RUTAS DE LA TABLA 2: ACTAS DISCIPLINARIAS
-// ====================================================
 app.get('/api/actas', (req, res) => {
     db.query('SELECT * FROM actas ORDER BY id DESC', (err, results) => {
         if (err) return res.status(500).send(err);
@@ -128,24 +126,25 @@ app.get('/api/actas', (req, res) => {
 });
 
 app.post('/api/actas', (req, res) => {
-    const { fecha, nombre, grado, seccion, motivo, cantidad, emitido_por } = req.body;
-    const query = 'INSERT INTO actas (fecha, nombre, grado, seccion, motivo, cantidad, emitido_por) VALUES (?, ?, ?, ?, ?, ?, ?)';
-    db.query(query, [fecha, nombre, grado, seccion, motivo, cantidad, emitido_por || 'Dirección Académica'], (err, results) => {
-        if (err) return res.status(500).send(err);
-        res.json({ id: results.insertId, tipo: 'actas', ...req.body });
-    });
+    const { fecha, nombre, grado, seccion, acudiente, aspectos, observacion, cantidad, emitido_por } = req.body;
+    const query = 'INSERT INTO actas (fecha, nombre, grado, seccion, acudiente, aspectos, observacion, cantidad, emitido_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+    db.query(
+        query,
+        [fecha, nombre, grado, seccion, acudiente, aspectos, observacion, cantidad, emitido_por || 'Dirección Académica'],
+        (err, results) => {
+            if (err) return res.status(500).send(err);
+            res.json({ id: results.insertId, tipo: 'actas', ...req.body });
+        }
+    );
 });
 
 app.delete('/api/actas/:id', (req, res) => {
     db.query('DELETE FROM actas WHERE id = ?', [req.params.id], (err) => {
         if (err) return res.status(500).send(err);
-        res.send('Acta eliminada correctamente');
+        res.send('Acta eliminada');
     });
 });
 
-// ====================================================
-// RUTAS DE LA TABLA 3: DEMÉRITOS
-// ====================================================
 app.get('/api/demeritos', (req, res) => {
     db.query('SELECT * FROM demeritos ORDER BY id DESC', (err, results) => {
         if (err) return res.status(500).send(err);
@@ -154,19 +153,42 @@ app.get('/api/demeritos', (req, res) => {
 });
 
 app.post('/api/demeritos', (req, res) => {
-    const { fecha, nombre, grado, seccion, motivo, cantidad, emitido_por } = req.body;
-    const query = 'INSERT INTO demeritos (fecha, nombre, grado, seccion, motivo, cantidad, emitido_por) VALUES (?, ?, ?, ?, ?, ?, ?)';
-    db.query(query, [fecha, nombre, grado, seccion, motivo, cantidad, emitido_por || 'Dirección Académica'], (err, results) => {
-        if (err) return res.status(500).send(err);
-        res.json({ id: results.insertId, tipo: 'demeritos', ...req.body });
-    });
+    const {
+        fecha, centro_educativo, codigo_ce, departamento, municipio, distrito,
+        nombre, nie, sexo, grado, seccion, turno,
+        literal_demerito, literal_redencion, literal_reconocimiento,
+        cantidad, emitido_por
+    } = req.body;
+
+    const query = `
+        INSERT INTO demeritos (
+            fecha, centro_educativo, codigo_ce, departamento, municipio, distrito,
+            nombre, nie, sexo, grado, seccion, turno,
+            literal_demerito, literal_redencion, literal_reconocimiento,
+            cantidad, emitido_por
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    db.query(
+        query,
+        [
+            fecha, centro_educativo, codigo_ce, departamento, municipio, distrito,
+            nombre, nie, sexo, grado, seccion, turno,
+            literal_demerito, literal_redencion || '', literal_reconocimiento || '',
+            cantidad, emitido_por || 'Dirección Académica'
+        ],
+        (err, results) => {
+            if (err) return res.status(500).send(err);
+            res.json({ id: results.insertId, tipo: 'demeritos', ...req.body });
+        }
+    );
 });
 
 app.delete('/api/demeritos/:id', (req, res) => {
     db.query('DELETE FROM demeritos WHERE id = ?', [req.params.id], (err) => {
         if (err) return res.status(500).send(err);
-        res.send('Demérito eliminado correctamente');
+        res.send('Demérito eliminado');
     });
 });
 
-app.listen(3000, () => console.log('🚀 Servidor Backend corriendo en el puerto 3000'));
+app.listen(3000, () => console.log('Servidor corriendo en puerto 3000'));
