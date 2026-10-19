@@ -30,8 +30,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       : { nombre: nombreUsuario, correo, password, rol: rolUsuario };
 
     try {
-      const res = await fetch(`http://localhost:3000${endpoint}`, {
-        method: 'POST',
+      const res = await fetch(`http://${window.location.hostname}:3000${endpoint}`, {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });

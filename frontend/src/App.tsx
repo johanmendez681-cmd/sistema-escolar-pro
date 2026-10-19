@@ -63,9 +63,9 @@ export default function App() {
   const cargarDatos = async () => {
     try {
       const [resActas, resDemeritos] = await Promise.all([
-        fetch('http://localhost:3000/api/actas'),
-        fetch('http://localhost:3000/api/demeritos')
-      ]);
+  fetch(`http://${window.location.hostname}:3000/api/actas`),
+  fetch(`http://${window.location.hostname}:3000/api/demeritos`)
+]);
 
       if (resActas.ok) {
         const dataActas = await resActas.json();
@@ -84,10 +84,12 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (usuarioActivo) {
-      cargarDatos();
-    }
-  }, [usuarioActivo]);
+  if (usuarioActivo) {
+    cargarDatos();
+    const intervalo = setInterval(cargarDatos, 3000);
+    return () => clearInterval(intervalo);
+  }
+}, [usuarioActivo]);
 
   const cerrarSesion = () => {
     localStorage.removeItem('sesionEscolarPro');
@@ -144,7 +146,7 @@ export default function App() {
     const endpoint = pestaña === 'actas' ? '/api/actas' : '/api/demeritos';
 
     try {
-      const res = await fetch(`http://localhost:3000${endpoint}`, {
+        const res = await fetch(`http://${window.location.hostname}:3000${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(nuevoRegistro)
@@ -183,7 +185,7 @@ export default function App() {
   const eliminarRegistro = async (id: number, tipo: 'actas' | 'demeritos') => {
     const endpoint = tipo === 'actas' ? `/api/actas/${id}` : `/api/demeritos/${id}`;
     try {
-      const res = await fetch(`http://localhost:3000${endpoint}`, { method: 'DELETE' });
+      const res = await fetch(`http://${window.location.hostname}:3000${endpoint}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Offline');
       cargarDatos();
     } catch {
